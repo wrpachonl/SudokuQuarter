@@ -100,3 +100,4 @@ de tal manera que si se accede a las unidades de C2 por ejemplo se obtiene :
 ```
 
 ## Pares
+Los pares son analogos a la definicion de unidades con la diferencia que en este diccionarios se almacenan los registros sin repeticion

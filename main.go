@@ -14,8 +14,15 @@ var unidades = defineUnits()
 var pares = definePeers()
 
 func main() {
-
-	fmt.Println(len(definePeers()["A2"]))
+	// var matriz string
+	// fmt.Println("Ingrese el sudoku a resolver")
+	// fmt.Scanf("%s", &matriz)
+	matriz := "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
+	matrizArray := []string{}
+	for i := 0; i < len(matriz); i++ {
+		matrizArray = append(matrizArray, string(matriz[i]))
+	}
+	fmt.Println(defineMatrizAsMap(matrizArray)["B2"])
 }
 func cross(rows string, cols string) []string {
 	var cuadros []string
@@ -111,4 +118,11 @@ func definePeers() map[string][]string {
 		pares[cuadros[s]] = append(pares[cuadros[s]], peerUnit(cuadros[s])...)
 	}
 	return pares
+}
+func defineMatrizAsMap(matriz []string) map[string]string {
+	result := make(map[string]string)
+	for i := 0; i < len(matriz); i++ {
+		result[cuadros[i]] = matriz[i]
+	}
+	return result
 }

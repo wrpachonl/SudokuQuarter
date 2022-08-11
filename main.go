@@ -1,221 +1,314 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
-var digitos = "123456789"
-var filas = "ABCDEFGHI"
-var columnas = digitos
-var cuadros = cross(filas, columnas)
-var unidadColumnas = crossLines(columnas, filas, false)
-var unidadFilas = crossLines(filas, columnas, true)
-var squares = squaresConstruction()
-var listaUnidades = joinArrays()
-var unidades = defineUnits()
-var pares = definePeers()
+const digitos string = "123456789"
+const filas string = "ABCDEFGHI"
+const columnas string = digitos
+
+var cuadrados = cross(filas, columnas)
+var listaUnidades = createUnitList(filas, columnas)
+var unidades = createUnits(cuadrados, listaUnidades)
+var pares = createPeers(unidades)
 
 func main() {
-	// var matriz string
-	// fmt.Println("Ingrese el sudoku a resolver")
-	// fmt.Scanf("%s", &matriz)
 	matriz := "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
-	matrizArray := []string{}
-	for i := 0; i < len(matriz); i++ {
-		matrizArray = append(matrizArray, string(matriz[i]))
-	}
-	result, _ := parse_grid(matrizArray)
-	display(result)
+	solution, _ := Solve(matriz)
+	Display(solution)
 }
-func cross(rows string, cols string) []string {
-	var cuadros []string
-	for i := 0; i < len(rows); i++ {
-		for j := 0; j < len(cols); j++ {
-			cuadros = append(cuadros, string(rows[i])+string(cols[j]))
+
+// Cross the product of each elements in strings A and B together
+func cross(A, B string) []string {
+	res := make([]string, len(A)*len(B))
+
+	i := 0
+	for _, a := range A {
+		for _, b := range B {
+			res[i] = string(a) + string(b)
+			i++
 		}
 	}
-	return cuadros
+
+	return res
 }
-func crossLines(row string, col string, order bool) [][]string {
-	var cuadroTotal [][]string
-	var cuadroLongitudinal []string
-	for i := 0; i < len(row); i++ {
-		for j := 0; j < len(col); j++ {
-			if order {
-				cuadroLongitudinal = append(cuadroLongitudinal, string(row[i])+string(col[j]))
-			} else {
-				cuadroLongitudinal = append(cuadroLongitudinal, string(col[j])+string(row[i]))
+
+// CreateUnitList list the 20 peers of each sudoku squares
+func createUnitList(rows, cols string) [][]string {
+	res := make([][]string, len(rows)*3)
+
+	i := 0
+	for _, c := range cols {
+		// A1 B1 C1 D1 E1 F1 G1 H1 I1...
+		res[i] = cross(rows, string(c))
+		i++
+	}
+
+	for _, r := range rows {
+		res[i] = cross(string(r), cols)
+		i++
+	}
+
+	rs := []string{`ABC`, `DEF`, `GHI`}
+	cs := []string{`123`, `456`, `789`}
+	for _, r := range rs {
+		for _, c := range cs {
+			res[i] = cross((r), string(c))
+			i++
+		}
+	}
+
+	return res
+}
+
+// CreateUnits find the units of each squares
+func createUnits(squares []string, unitList [][]string) map[string][][]string {
+	units := make(map[string][][]string, len(squares))
+
+	for _, s := range squares {
+		unit := make([][]string, 3)
+		i := 0
+		for _, u := range unitList {
+			// For each squares of the unit
+			for _, su := range u {
+				if s == su {
+					unit[i] = u
+					i++
+					break
+				}
 			}
 		}
-		cuadroTotal = append(cuadroTotal, cuadroLongitudinal)
-		cuadroLongitudinal = nil
+		units[s] = unit
 	}
-	return cuadroTotal
+
+	return units
 }
-func squaresConstruction() [][]string {
-	var cuadroTotal [][]string
-	var cuadroLongitudinal []string
-	rowsPossible := [...]string{"ABC", "DEF", "GHI"}
-	colsPossible := [...]string{"123", "456", "789"}
-	for i := 0; i < len(rowsPossible); i++ {
-		for j := 0; j < len(colsPossible); j++ {
-			cuadroLongitudinal = append(cuadroLongitudinal, cross(rowsPossible[i], colsPossible[j])...)
-			cuadroTotal = append(cuadroTotal, cuadroLongitudinal)
-			cuadroLongitudinal = nil
+
+// CreatePeers find the 20 peers of a square
+func createPeers(units map[string][][]string) map[string]map[string]bool {
+	peers := make(map[string]map[string]bool, len(units))
+
+	for s, ul := range units {
+		peer := make(map[string]bool, 20)
+		for _, u := range ul {
+			for _, su := range u {
+				if s != su {
+					peer[su] = true
+				}
+			}
+		}
+		peers[s] = peer
+	}
+
+	return peers
+}
+
+// GridValues match all the sudoku values to its square
+func gridValues(grid string) (map[string]string, error) {
+	values := make(map[string]string, len(grid))
+	chars := make([]string, len(grid))
+
+	// The number of clues given in the grid
+	nbClues := 0
+	var diffDigits []string
+
+	// For each square
+	for i := 0; i < len(grid); i++ {
+		// Value of the square
+		str := grid[i : i+1]
+
+		// Valid that the square value is a digit from 1 to 9 ('0' or '.' for empties)
+		// and add it to the sudoku list of values.
+		if strings.Contains(digitos, str) || strings.Contains("0.", str) {
+			chars[i] = str
+		}
+		if strings.Contains(digitos, str) {
+			nbClues++
+			if !contains(diffDigits, str) {
+				diffDigits = append(diffDigits, str)
+			}
+		}
+	}
+
+	if len(chars) != 81 {
+
+		return nil, fmt.Errorf("Invalid grid size: expected grid size of 81 found grid size of %d", len(chars))
+	} else if nbClues < 17 {
+		return nil, fmt.Errorf("Invalid number of squares filled: expected a minimum of 17 clues found %d", nbClues)
+	} else if len(diffDigits) < 8 {
+		return nil, fmt.Errorf("Invalid number of different clues digits: expected a minimum of 8 different digits found %d", len(diffDigits))
+	}
+
+	// Map the square value to it's corresponding key (A1, B5, D8,...)
+	for i := 0; i < len(grid); i++ {
+		values[cuadrados[i]] = chars[i]
+	}
+
+	return values, nil
+}
+
+// ParseGrid convert a grid to a dict of possible values, {square: digits}, or
+// return nil if a contradiction is detected.
+func parseGrid(grid string) (values map[string]string, err error) {
+	values = make(map[string]string, len(cuadrados))
+	for _, s := range cuadrados {
+		values[s] = digitos
+	}
+
+	gr, err := gridValues(grid)
+	for s, v := range gr {
+		if strings.Contains(digitos, v) {
+			values = assign(values, s, v)
+			if values == nil {
+				return nil, nil
+			}
+		}
+	}
+	return values, err
+}
+
+// Eliminate removes d from values[s]; propagate when values or places <= 2.
+// Return values, except return False if a contradiction is detected.
+func eliminate(values map[string]string, s string, v string) (map[string]string, bool) {
+	// The value is already eliminated
+	if !strings.Contains(values[s], v) {
+		return values, true
+	}
+
+	// Remove all occurrences of the value (v) from the square possible values
+	values[s] = strings.Replace(values[s], v, "", -1)
+
+	// If a square (s) is reduced to one value (v2), then eliminate the value from the peers.
+	if len(values[s]) == 0 {
+		return nil, false
+	} else if len(values[s]) == 1 {
+		v2 := values[s]
+
+		for s2 := range pares[s] {
+			if _, ok := eliminate(values, s2, v2); !ok {
+				return nil, false
+			}
+		}
+	}
+
+	// If a unit (u) has only one possible place for a value (v), then put it there.
+	for _, u := range unidades[s] {
+		dplaces := []string{}
+		for _, s := range u {
+			if strings.Contains(values[s], v) {
+				dplaces = append(dplaces, s)
+			}
 		}
 
+		if len(dplaces) == 0 {
+			return nil, false
+		} else if len(dplaces) == 1 {
+			if assign(values, dplaces[0], v) == nil {
+				return nil, false
+			}
+		}
 	}
-	return cuadroTotal
-}
-func joinArrays() [][]string {
-	result := append(unidadColumnas, unidadFilas...)
-	result = append(result, squares...)
-	return result
+
+	return values, true
 }
 
-func contains(element []string, value string) bool {
-	for _, s := range element {
-		if value == s {
+// Assign eliminate all the other values (except v) from a square possible values and propagate.
+func assign(values map[string]string, s string, v string) map[string]string {
+	otherValues := strings.Replace(values[s], v, "", -1)
+	for _, v := range otherValues {
+		if _, ok := eliminate(values, s, string(v)); !ok {
+			return nil
+		}
+	}
+	return values
+}
+
+// Search using depth-first search and propagation, try all possible values.
+func search(values map[string]string) (map[string]string, error) {
+	if values == nil {
+		return nil, errors.New("The sudoku contains errors and can not be solved")
+	}
+
+	// Check if there is only one remaining possibility in every square
+	// If true, return the solved sudoku
+	solved := true
+	for s := range values {
+		if len(values[s]) != 1 {
+			solved = false
+		}
+	}
+
+	if solved {
+		return values, nil
+	}
+
+	// Chose the first unfilled square with the fewest possibilities
+	min := len(digitos) + 1
+	sq := ""
+	for _, s := range cuadrados {
+		l := len(values[s])
+		if l > 1 && l < min {
+			sq = s
+			min = l
+		}
+	}
+
+	ch := make(chan map[string]string)
+	for _, v := range values[sq] {
+		go func(val string) {
+			newValues := cloneValues(values)
+			value, _ := search(assign(newValues, sq, val))
+			if value != nil {
+				ch <- value
+			}
+		}(string(v))
+	}
+	return <-ch, nil
+}
+
+// CloneValues from one map to another
+func cloneValues(m map[string]string) map[string]string {
+	newMap := make(map[string]string, len(m))
+	for k, v := range m {
+		newMap[k] = v
+	}
+	return newMap
+}
+
+// Solve the sudoku in input
+func Solve(grid string) (map[string]string, error) {
+	pg, err := parseGrid(grid)
+	if err != nil {
+		return nil, err
+	}
+
+	return search(pg)
+}
+
+// Display the solved sudoku
+func Display(values map[string]string) {
+	for i, row := range filas {
+		for j, col := range digitos {
+			if j == 3 || j == 6 {
+				fmt.Printf("| ")
+			}
+			fmt.Printf("%v ", values[string(row)+string(col)])
+		}
+		fmt.Println()
+		if i == 2 || i == 5 {
+			fmt.Println("------+-------+-------")
+		}
+	}
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
 			return true
 		}
 	}
 	return false
-}
-func containsString(baseElement string, searchElement string) bool {
-	if position := strings.Index(baseElement, searchElement); position != -1 {
-		return true
-	}
-	return false
-}
-func defineUnits() map[string][][]string {
-	unidades := make(map[string][][]string)
-	for s := 0; s < len(cuadros); s++ {
-		for u := 0; u < len(listaUnidades); u++ {
-			if contains(listaUnidades[u], cuadros[s]) {
-				unidades[cuadros[s]] = append(unidades[cuadros[s]], listaUnidades[u])
-			}
-		}
-	}
-	return unidades
-}
-func unique(array []string) []string {
-	keys := make(map[string]bool)
-	list := []string{}
-	for _, entry := range array {
-		if _, value := keys[entry]; !value {
-			keys[entry] = true
-			list = append(list, entry)
-		}
-	}
-	return list
-}
-func peerUnit(key string) []string {
-	result := []string{}
-	for u := 0; u < len(unidades[key]); u++ {
-		for s := 0; s < len(unidades[key][u]); s++ {
-			if unidades[key][u][s] != key {
-				result = append(result, unidades[key][u][s])
-			}
-		}
-	}
-	return unique(result)
-}
-
-func definePeers() map[string][]string {
-	pares := make(map[string][]string)
-	for s := 0; s < len(cuadros); s++ {
-		pares[cuadros[s]] = append(pares[cuadros[s]], peerUnit(cuadros[s])...)
-	}
-	return pares
-}
-func grid_values(matriz []string) map[string]string {
-	result := make(map[string]string)
-	for i := 0; i < len(matriz); i++ {
-		result[cuadros[i]] = matriz[i]
-	}
-	return result
-}
-
-func parse_grid(grid []string) (map[string]string, bool) {
-	values := make(map[string]string)
-	grid_v := grid_values(grid)
-	for i := 0; i < len(grid); i++ {
-		values[cuadros[i]] = digitos
-	}
-	for square, digits := range grid_v {
-		_, error := assign(values, square, digits)
-		if containsString(digitos, digits) && !error {
-			return nil, false
-		}
-	}
-	return values, true
-}
-
-func assign(values map[string]string, square string, deleteItem string) (map[string]string, bool) {
-	other_values := strings.Replace(values[square], deleteItem, "", -1)
-	for _, deleteItem2 := range other_values {
-		valueResult, resultError := eliminate(values, square, string(deleteItem2))
-		if !resultError {
-			return nil, false
-		}
-		return valueResult, true
-	}
-	return values, true
-}
-
-func eliminate(values map[string]string, square string, deleteItem string) (map[string]string, bool) {
-	if !containsString(values[square], deleteItem) {
-		return values, true
-	}
-	values[square] = strings.Replace(values[square], deleteItem, "", -1)
-	if len(values[square]) == 0 {
-		return nil, false
-	} else if len(values[square]) == 1 {
-		deleteItem2 := values[square]
-		for i := 0; i < len(pares[square]); i++ {
-			_, resultEliminate := eliminate(values, pares[square][i], deleteItem2)
-			if !resultEliminate {
-				return nil, false
-			}
-		}
-	}
-	for i := 0; i < len(unidades[square]); i++ {
-		dplaces := []string{}
-		for s := 0; s < len(unidades[square][i]); i++ {
-			if containsString(values[square], deleteItem) {
-				dplaces = append(dplaces, square)
-			}
-		}
-		if len(dplaces) == 0 {
-			return nil, false
-		} else if len(dplaces) == 1 {
-			_, resultAssign := assign(values, dplaces[0], deleteItem)
-			if !resultAssign {
-				return nil, false
-			}
-		}
-	}
-	return values, true
-}
-
-func display(values map[string]string) {
-	fmt.Println("+-------+-------+-------+")
-	for row := 0; row < 9; row++ {
-		fmt.Print("| ")
-		for col := 0; col < 9; col++ {
-			if col == 3 || col == 6 {
-				fmt.Print("| ")
-			}
-			fmt.Printf("%s ", values[string(filas[row])+string(columnas[col])])
-			if col == 8 {
-				fmt.Print("|")
-			}
-		}
-		if row == 2 || row == 5 || row == 8 {
-			fmt.Println("\n+-------+-------+-------+")
-		} else {
-			fmt.Println()
-		}
-	}
 }

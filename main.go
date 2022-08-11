@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 var digitos = "123456789"
 var filas = "ABCDEFGHI"
@@ -22,7 +25,8 @@ func main() {
 	for i := 0; i < len(matriz); i++ {
 		matrizArray = append(matrizArray, string(matriz[i]))
 	}
-	fmt.Println(defineMatrizAsMap(matrizArray)["B2"])
+	result, _ := parse_grid(matrizArray)
+	display(result)
 }
 func cross(rows string, cols string) []string {
 	var cuadros []string
@@ -78,6 +82,12 @@ func contains(element []string, value string) bool {
 	}
 	return false
 }
+func containsString(baseElement string, searchElement string) bool {
+	if position := strings.Index(baseElement, searchElement); position != -1 {
+		return true
+	}
+	return false
+}
 func defineUnits() map[string][][]string {
 	unidades := make(map[string][][]string)
 	for s := 0; s < len(cuadros); s++ {
@@ -119,10 +129,93 @@ func definePeers() map[string][]string {
 	}
 	return pares
 }
-func defineMatrizAsMap(matriz []string) map[string]string {
+func grid_values(matriz []string) map[string]string {
 	result := make(map[string]string)
 	for i := 0; i < len(matriz); i++ {
 		result[cuadros[i]] = matriz[i]
 	}
 	return result
+}
+
+func parse_grid(grid []string) (map[string]string, bool) {
+	values := make(map[string]string)
+	grid_v := grid_values(grid)
+	for i := 0; i < len(grid); i++ {
+		values[cuadros[i]] = digitos
+	}
+	for square, digits := range grid_v {
+		_, error := assign(values, square, digits)
+		if containsString(digitos, digits) && !error {
+			return nil, false
+		}
+	}
+	return values, true
+}
+
+func assign(values map[string]string, square string, deleteItem string) (map[string]string, bool) {
+	other_values := strings.Replace(values[square], deleteItem, "", -1)
+	for _, deleteItem2 := range other_values {
+		valueResult, resultError := eliminate(values, square, string(deleteItem2))
+		if !resultError {
+			return nil, false
+		}
+		return valueResult, true
+	}
+	return values, true
+}
+
+func eliminate(values map[string]string, square string, deleteItem string) (map[string]string, bool) {
+	if !containsString(values[square], deleteItem) {
+		return values, true
+	}
+	values[square] = strings.Replace(values[square], deleteItem, "", -1)
+	if len(values[square]) == 0 {
+		return nil, false
+	} else if len(values[square]) == 1 {
+		deleteItem2 := values[square]
+		for i := 0; i < len(pares[square]); i++ {
+			_, resultEliminate := eliminate(values, pares[square][i], deleteItem2)
+			if !resultEliminate {
+				return nil, false
+			}
+		}
+	}
+	for i := 0; i < len(unidades[square]); i++ {
+		dplaces := []string{}
+		for s := 0; s < len(unidades[square][i]); i++ {
+			if containsString(values[square], deleteItem) {
+				dplaces = append(dplaces, square)
+			}
+		}
+		if len(dplaces) == 0 {
+			return nil, false
+		} else if len(dplaces) == 1 {
+			_, resultAssign := assign(values, dplaces[0], deleteItem)
+			if !resultAssign {
+				return nil, false
+			}
+		}
+	}
+	return values, true
+}
+
+func display(values map[string]string) {
+	fmt.Println("+-------+-------+-------+")
+	for row := 0; row < 9; row++ {
+		fmt.Print("| ")
+		for col := 0; col < 9; col++ {
+			if col == 3 || col == 6 {
+				fmt.Print("| ")
+			}
+			fmt.Printf("%s ", values[string(filas[row])+string(columnas[col])])
+			if col == 8 {
+				fmt.Print("|")
+			}
+		}
+		if row == 2 || row == 5 || row == 8 {
+			fmt.Println("\n+-------+-------+-------+")
+		} else {
+			fmt.Println()
+		}
+	}
 }
